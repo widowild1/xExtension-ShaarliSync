@@ -1,0 +1,219 @@
+<?php
+$ext_id = Minz_Request::param('e', 'ShaarliSync');
+$ext = null;
+if (isset($this->extension) && $this->extension !== null) {
+    $ext = $this->extension;
+} elseif (class_exists('Minz_ExtensionManager')) {
+    $ext = Minz_ExtensionManager::findExtension($ext_id);
+}
+
+$getVal = function($key, $default = '') use ($ext) {
+    if ($ext !== null && method_exists($ext, 'getUserConfigurationValue')) {
+        $v = $ext->getUserConfigurationValue($key);
+        if ($v !== null && $v !== '') return $v;
+    }
+    return $default;
+};
+
+$t = function($key, $fallback = '') {
+    $s = _t('ext.shaarlisync.' . $key);
+    return ($s !== 'ext.shaarlisync.' . $key && !empty($s)) ? $s : $fallback;
+};
+
+$csrf = '';
+if (class_exists('FreshRSS_Auth') && method_exists('FreshRSS_Auth', 'csrfToken')) {
+    $csrf = FreshRSS_Auth::csrfToken();
+}
+
+$testReport = null;
+if (class_exists('Minz_Session')) {
+    $testReport = Minz_Session::param('shaarlisync_test_report');
+    Minz_Session::_param('shaarlisync_test_report', null);
+}
+?>
+
+<?php if (!empty($testReport)): ?>
+  <div class="alert <?php echo $testReport['ok'] ? 'alert-success' : 'alert-error'; ?>" style="margin-bottom: 20px; padding: 12px; border-radius: 4px;">
+    <strong><?php echo htmlspecialchars($t('diag_title', 'Rapport de diagnostic :')); ?></strong>
+    <ul style="margin: 8px 0 0 20px;">
+      <?php foreach ($testReport['logs'] as $log): ?>
+        <li><?php echo htmlspecialchars($log); ?></li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+<?php endif; ?>
+
+<form action="<?php echo _url('extension', 'configure', 'e', $ext_id); ?>" method="post">
+  <input type="hidden" name="_csrf" value="<?php echo htmlspecialchars($csrf); ?>" />
+
+  <h3><?php echo htmlspecialchars($t('shaarli_title', 'Shaarli (Obligatoire)')); ?></h3>
+  <div class="form-group">
+    <label class="group-name" for="shaarli_url"><?php echo htmlspecialchars($t('shaarli_url', 'URL de Shaarli :')); ?></label>
+    <div class="group-controls">
+      <input type="url" name="shaarli_url" id="shaarli_url" class="round" value="<?php echo htmlspecialchars($getVal('shaarli_url')); ?>" placeholder="https://shaarli.exemple.com" required />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="shaarli_secret"><?php echo htmlspecialchars($t('shaarli_secret', 'API Secret Shaarli :')); ?></label>
+    <div class="group-controls">
+      <input type="password" name="shaarli_secret" id="shaarli_secret" class="round" value="<?php echo htmlspecialchars($getVal('shaarli_secret')); ?>" required />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="shaarli_tags"><?php echo htmlspecialchars($t('shaarli_tags', 'Tags fixes par défaut :')); ?></label>
+    <div class="group-controls">
+      <input type="text" name="shaarli_tags" id="shaarli_tags" class="round" value="<?php echo htmlspecialchars($getVal('shaarli_tags', 'freshrss, favoris')); ?>" placeholder="tag1, tag2" />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="shaarli_private"><?php echo htmlspecialchars($t('shaarli_private', 'Visibilité :')); ?></label>
+    <div class="group-controls">
+      <label class="checkbox">
+        <input type="checkbox" name="shaarli_private" id="shaarli_private" value="1" <?php echo $getVal('shaarli_private') ? 'checked="checked"' : ''; ?> />
+        <?php echo htmlspecialchars($t('shaarli_private', 'Enregistrer les liens en privé sur Shaarli')); ?>
+      </label>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name"><?php echo htmlspecialchars($t('content_options', 'Options de contenu :')); ?></label>
+    <div class="group-controls">
+      <label class="checkbox">
+        <input type="checkbox" name="include_rss_tags" id="include_rss_tags" value="1" <?php echo $getVal('include_rss_tags', 1) ? 'checked="checked"' : ''; ?> />
+        <?php echo htmlspecialchars($t('include_rss_tags', 'Conserver les catégories / tags d'origine du flux RSS')); ?>
+      </label><br>
+      <label class="checkbox">
+        <input type="checkbox" name="archive_wayback" id="archive_wayback" value="1" <?php echo $getVal('archive_wayback', 0) ? 'checked="checked"' : ''; ?> />
+        <?php echo htmlspecialchars($t('archive_wayback', 'Ajouter un lien vers la Wayback Machine en bas de description')); ?>
+      </label>
+    </div>
+  </div>
+
+  <hr />
+
+  <h3><?php echo htmlspecialchars($t('ai_title', 'Intelligence Artificielle (Optionnel)')); ?></h3>
+  <p class="help" style="color: #666; margin-bottom: 12px;">
+    <?php echo htmlspecialchars($t('ai_help', 'Laissez sur « Désactivé » pour synchroniser vos favoris vers Shaarli sans traitement IA.')); ?>
+  </p>
+
+  <div class="form-group">
+    <label class="group-name" for="ai_provider"><?php echo htmlspecialchars($t('ai_provider', 'Fournisseur IA :')); ?></label>
+    <div class="group-controls">
+      <select name="ai_provider" id="ai_provider" class="round">
+        <option value="none" <?php echo ($getVal('ai_provider', 'none') === 'none') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('ai_none', 'Désactivé (aucun)')); ?></option>
+        <option value="openai" <?php echo ($getVal('ai_provider') === 'openai') ? 'selected="selected"' : ''; ?>>OpenAI (ChatGPT)</option>
+        <option value="gemini" <?php echo ($getVal('ai_provider') === 'gemini') ? 'selected="selected"' : ''; ?>>Google Gemini</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="ai_api_key"><?php echo htmlspecialchars($t('ai_api_key', 'Clé d'API IA :')); ?></label>
+    <div class="group-controls">
+      <input type="password" name="ai_api_key" id="ai_api_key" class="round" value="<?php echo htmlspecialchars($getVal('ai_api_key')); ?>" placeholder="Optionnel (sk-... ou AIza...)" />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="ai_model"><?php echo htmlspecialchars($t('ai_model', 'Modèle personnalisé :')); ?></label>
+    <div class="group-controls">
+      <input type="text" name="ai_model" id="ai_model" class="round" value="<?php echo htmlspecialchars($getVal('ai_model')); ?>" placeholder="Par défaut : gemini-3.5-flash-lite ou gpt-4o-mini" />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="ai_language"><?php echo htmlspecialchars($t('ai_language', 'Langue du résumé :')); ?></label>
+    <div class="group-controls">
+      <select name="ai_language" id="ai_language" class="round">
+        <option value="français" <?php echo ($getVal('ai_language', 'français') === 'français') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('lang_fr', 'Français')); ?></option>
+        <option value="anglais" <?php echo ($getVal('ai_language') === 'anglais') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('lang_en', 'English')); ?></option>
+        <option value="allemand" <?php echo ($getVal('ai_language') === 'allemand') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('lang_de', 'Deutsch')); ?></option>
+        <option value="espagnol" <?php echo ($getVal('ai_language') === 'espagnol') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('lang_es', 'Español')); ?></option>
+        <option value="chinois" <?php echo ($getVal('ai_language') === 'chinois') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('lang_zh', '中文')); ?></option>
+        <option value="arabe" <?php echo ($getVal('ai_language') === 'arabe') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('lang_ar', 'العربية')); ?></option>
+        <option value="italien" <?php echo ($getVal('ai_language') === 'italien') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('lang_it', 'Italiano')); ?></option>
+        <option value="portugais" <?php echo ($getVal('ai_language') === 'portugais') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('lang_pt', 'Português')); ?></option>
+        <option value="la langue d'origine de l'article" <?php echo ($getVal('ai_language') === "la langue d'origine de l'article") ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('lang_origin', 'Identique à la source')); ?></option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="ai_tone"><?php echo htmlspecialchars($t('ai_tone', 'Format & Style du résumé :')); ?></label>
+    <div class="group-controls">
+      <select name="ai_tone" id="ai_tone" class="round">
+        <option value="synthétique, factuel et direct (style TL;DR)" <?php echo ($getVal('ai_tone') === 'synthétique, factuel et direct (style TL;DR)') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('tone_tldr', 'Factuel & Concis (TL;DR)')); ?></option>
+        <option value="structuré sous forme de 2 à 3 points clés avec tirets (-)" <?php echo ($getVal('ai_tone') === 'structuré sous forme de 2 à 3 points clés avec tirets (-)') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('tone_bullets', 'Points clés à tirets (-)')); ?></option>
+        <option value="technique, précis et orienté experts" <?php echo ($getVal('ai_tone') === 'technique, précis et orienté experts') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('tone_tech', 'Technique & Précis')); ?></option>
+        <option value="vulgarisé, clair et accessible" <?php echo ($getVal('ai_tone') === 'vulgarisé, clair et accessible') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('tone_simple', 'Vulgarisé & Pédagogique')); ?></option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="ai_tag_count"><?php echo htmlspecialchars($t('ai_tag_count', 'Nombre de tags IA :')); ?></label>
+    <div class="group-controls">
+      <input type="number" name="ai_tag_count" id="ai_tag_count" class="round" min="1" max="15" value="<?php echo htmlspecialchars($getVal('ai_tag_count', '4')); ?>" />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name"><?php echo htmlspecialchars($t('ai_options', 'Options IA :')); ?></label>
+    <div class="group-controls">
+      <label class="checkbox">
+        <input type="checkbox" name="ai_generate_summary" id="ai_generate_summary" value="1" <?php echo $getVal('ai_generate_summary', 1) ? 'checked="checked"' : ''; ?> />
+        <?php echo htmlspecialchars($t('ai_gen_summary', 'Générer un résumé par IA')); ?>
+      </label><br>
+      <label class="checkbox">
+        <input type="checkbox" name="ai_generate_tags" id="ai_generate_tags" value="1" <?php echo $getVal('ai_generate_tags', 1) ? 'checked="checked"' : ''; ?> />
+        <?php echo htmlspecialchars($t('ai_gen_tags', 'Générer des tags thématiques par IA')); ?>
+      </label><br>
+      <label class="checkbox">
+        <input type="checkbox" name="fetch_full_content" id="fetch_full_content" value="1" <?php echo $getVal('fetch_full_content', 0) ? 'checked="checked"' : ''; ?> />
+        <?php echo htmlspecialchars($t('fetch_full_content', 'Télécharger la page source si le flux RSS est tronqué (< 400 caractères)')); ?>
+      </label>
+    </div>
+  </div>
+
+  <hr />
+
+  <h3><?php echo htmlspecialchars($t('ntfy_title', 'Notifications ntfy (Optionnel)')); ?></h3>
+  <div class="form-group">
+    <label class="group-name" for="ntfy_enabled"><?php echo htmlspecialchars($t('ntfy_enabled', 'Activer ntfy :')); ?></label>
+    <div class="group-controls">
+      <select name="ntfy_enabled" id="ntfy_enabled" class="round">
+        <option value="0" <?php echo !$getVal('ntfy_enabled') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('ntfy_opt_no', 'Désactivé')); ?></option>
+        <option value="1" <?php echo $getVal('ntfy_enabled') ? 'selected="selected"' : ''; ?>><?php echo htmlspecialchars($t('ntfy_opt_yes', 'Activé')); ?></option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="ntfy_url"><?php echo htmlspecialchars($t('ntfy_url', 'URL ntfy :')); ?></label>
+    <div class="group-controls">
+      <input type="url" name="ntfy_url" id="ntfy_url" class="round" value="<?php echo htmlspecialchars($getVal('ntfy_url', 'https://ntfy.sh')); ?>" />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="ntfy_topic"><?php echo htmlspecialchars($t('ntfy_topic', 'Topic ntfy :')); ?></label>
+    <div class="group-controls">
+      <input type="text" name="ntfy_topic" id="ntfy_topic" class="round" value="<?php echo htmlspecialchars($getVal('ntfy_topic')); ?>" placeholder="mon_topic_secret" />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="group-name" for="ntfy_token"><?php echo htmlspecialchars($t('ntfy_token', 'Token ntfy :')); ?></label>
+    <div class="group-controls">
+      <input type="password" name="ntfy_token" id="ntfy_token" class="round" value="<?php echo htmlspecialchars($getVal('ntfy_token')); ?>" placeholder="Optionnel (tk_...)" />
+    </div>
+  </div>
+
+  <div class="form-group form-actions" style="margin-top: 25px; display: flex; gap: 10px;">
+    <button type="submit" class="btn btn-important"><?php echo htmlspecialchars($t('btn_save', 'Enregistrer les paramètres')); ?></button>
+    <button type="submit" name="test_config" value="1" class="btn btn-attention" style="background-color: #f39c12; color: #fff;"><?php echo htmlspecialchars($t('btn_test', 'Tester la configuration')); ?></button>
+  </div>
+</form>
