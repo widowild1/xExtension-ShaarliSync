@@ -1,6 +1,6 @@
 {
   "name": "ShaarliSync",
-  "author": "Perso",
+  "author": "widowild1",
   "description": "Automatically syncs favorite RSS articles to Shaarli with optional AI summarization/tagging (EN/FR/DE/ES/ZH/AR/IT/PT) and push alerts via ntfy.",
   "version": "1.5.0",
   "entrypoint": "ShaarliSync",
